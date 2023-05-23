@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>SSH Keys 4 You</title>
+        <meta title="Your one stop shop for never having to enter a password again">
+
+        <script>
+            
+            var importedPublicKey = null;
+            var importedPrivateKey = null;
+            
+            async function encryptData(publicKey, data) {
+                const encryptedData = await crypto.subtle.encrypt(
+                    {
+                    name: "RSA-OAEP"
+                    },
+                    publicKey,
+                    new TextEncoder().encode(data)
+                );
+
+                return encryptedData;
+            }
+
+            async function decryptData(privateKey, encryptedData) {
+                const decryptedData = await crypto.subtle.decrypt(
+                    {
+                    name: "RSA-OAEP"
+                    },
+                    privateKey,
+                    encryptedData
+                );
+
+                const decryptedText = new TextDecoder().decode(decryptedData);
+
+                return decryptedText;
+            }
+
+            function doEncrypt(){
+                let dataToEncrypt = document.getElementById('test').value;
+                encryptData(importedPublicKey, dataToEncrypt)
+                .then(encryptedData => {
+                    console.log("Encrypted data:", encryptedData);
+                    let uint8 = new Uint8Array(encryptedData);
+                    var b64encoded = btoa(String.fromCharCode.apply(null, uint8));
+                    console.log(b64encoded);
+                    document.getElementById('test').value = b64encoded;
+                })
+            }
+           
+            function doDecrypt(){
+                let encryptedData = document.getElementById('test').value;
+                var u8_2 = new Uint8Array(atob(encryptedData).split("").map(function(c) {
+    return c.charCodeAt(0); }));
+                console.log(u8_2)
+                decryptData(importedPrivateKey, u8_2)
+                .then(decryptedData => {
+                    console.log("Decrypted data:", decryptedData);
+                    document.getElementById('test').value = decryptedData;
+                });
+            }
+            
+      
+            async function importSPKIKey(spkiKeyString) {
+                //const spkiKeyBytes = new TextEncoder().encode(spkiKeyString);
+                const spkiKeyBytes = Uint8Array.from(atob(spkiKeyString), c => c.charCodeAt(0));
+
+                // Import the SPKI key using Web Crypto API
+                const importedKey = await crypto.subtle.importKey(
+                    "spki",
+                    spkiKeyBytes,
+                    { name: "RSA-OAEP", hash: { name: "SHA-256" } },
+                    true,
+                    ["encrypt"]
+                );
+
+                return importedKey;
+            }
+
+
+            async function importPKCS8Key(pkcs8KeyString) {
+                // Convert the PKCS8 key string to a Uint8Array
+                const pkcs8KeyBytes = Uint8Array.from(atob(pkcs8KeyString), c => c.charCodeAt(0));
+
+                // Import the PKCS8 key using Web Crypto API
+                const importedKey = await crypto.subtle.importKey(
+                    "pkcs8",
+                    pkcs8KeyBytes,
+                    { name: "RSA-OAEP", hash: { name: "SHA-256" } },
+                    true,
+                    ["decrypt"]
+                );
+                return importedKey;
+            }
+
+
+
+            function importKeys(){
+                let public_text = document.getElementById("public_key").value;
+                public_key_text = public_text.split('\n')[1];
+                console.log(public_key_text);
+                importSPKIKey(public_key_text)
+                .then(importedKey => {
+                    console.log("Key imported successfully:", importedKey);
+                    importedPublicKey = importedKey;
+                })
+
+
+                let private_text = document.getElementById("private_key").value;
+                private_key_text = private_text.split('\n')[1];
+                importPKCS8Key(private_key_text)
+                .then(importedKey => {
+                    console.log("Key imported successfully:", importedKey);
+                    importedPrivateKey = importedKey;
+                })
+
+            }
+
+
+
+            function exportKey(key, type) {
+                return window.crypto.subtle.exportKey(type, key)
+                .then((keyData) => {
+                    const keyBuffer = new Uint8Array(keyData);
+                    const keyString = String.fromCharCode.apply(null, keyBuffer);
+                    const b64KeyString = btoa(keyString);
+                    const pemKeyString = `-----BEGIN ${type.toUpperCase()} KEY-----\n${b64KeyString}\n-----END ${type.toUpperCase()} KEY-----\n`;
+                    return pemKeyString;
+                });
+            }
+
+            function generateKeys(){
+                window.crypto.subtle.generateKey(
+                {
+                    name: "RSA-OAEP",
+                    modulusLength: 2048,
+                    publicExponent: new Uint8Array([0x01, 0x00, 0x01]),
+                    hash: "SHA-256",
+                },
+                true,
+                ["encrypt", "decrypt"]
+                )
+                .then((keyPair) => {
+                    importedPrivateKey = keyPair.privateKey;
+                    importedPublicKey = keyPair.publicKey;
+                exportKey(keyPair.publicKey, "spki")
+                .then((publicKeyPem) => {
+                    ///console.log(publicKeyPem);
+                    document.getElementById("public_key").value = publicKeyPem;
+                });
+                
+                exportKey(keyPair.privateKey, "pkcs8")
+                .then((privateKeyPem) => {
+                    //console.log(privateKeyPem);
+                    document.getElementById("private_key").value = privateKeyPem;
+                });
+                })
+                .catch((err) => console.error(err));
+
+            }
+
+        </script>
+
+
+    </head>
+    <body style="text-align:left; max-width:1024px; border:10px black solid";>
+        <h1>Webcrypto RSA Public/Private Encryption</h1>
+        <h3>Generate Keys, or paste yours in the field and use for KRYPTOGRAPHY</h3>
+        <h4>Powered by WebCryptoAPI (its in your browser)</h4>
+        <div>
+           <button onclick="generateKeys()">Generate Keys</button>
+           <button onclick="importKeys()">Import Keys</button>
+           <button onclick="doEncrypt()">Encrypt</button>
+           <button onclick="doDecrypt()">Decrypt</button>
+        <div>
+        <div>
+            <h3>Public Key</h3>
+            <textarea id="public_key"></textarea>
+            <h3>Private Key</h3>
+            <textarea id="private_key"></textarea>
+            <h3>En/Decrypt Field</h3>
+            <textarea id="test"></textarea>
+        </div>
+
+
+
+
+
+
+
+        </div>
+    </body>
+</html>

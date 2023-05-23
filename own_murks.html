@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>SSH Keys 4 You</title>
+        <meta title="Your one stop shop for never having to enter a password again">
+
+        <script>
+        function isPrime(n, k) {
+            // n is the number to test, k is the number of iterations
+            if (n <= 1 || n == 4) return false;
+            if (n <= 3) return true;
+            while (k > 0) {
+                let a = Math.floor(Math.random() * (n - 3)) + 2; // choose a random number between 2 and n-2
+                let x = Math.pow(a, n - 1) % n;
+                if (x != 1) return false;
+                k--;
+            }
+            return true;
+        }
+
+
+        function find2Primes(){
+            let havePrimes = [];
+            let big_numba = BigInt(Math.floor(Math.random()*381739))
+            let tries = 0;
+            while(havePrimes.length<2){
+                tries++;
+                let random = BigInt(Math.floor(Math.random() * Number(big_numba))) + big_numba;
+                let prime_this = (BigInt(2)**big_numba)-BigInt(1);
+
+                if(isPrime(prime_this)){
+                    havePrimes.push(prime_this);
+                }
+
+                if(tries>999){
+                    big_numba = BigInt(Math.floor(Math.random()*381739))
+                    tries = 0;
+                }
+            }
+            return havePrimes;
+        }       
+
+        function gcd(a, b) {
+            while (b !== 0n) {
+                const t = b;
+                b = a % b;
+                a = t;
+            }
+        return a;
+}
+
+
+        function isRelativelyPrime(e, phi) {
+            return gcd(e, phi) === 1;
+        }
+
+        function randomInRange(min, max) {
+            // Compute the range
+            const range = max - min + 1n;
+            let rand = 0;
+            while(true){
+                let test = BigInt(Math.floor((Math.random()*848466364565)));
+                if(test>range){
+                    test = 0;
+                }
+                rand = test;
+                if(Math.random()<0.01){
+                    break;
+                }
+            }
+            return rand;
+
+        }
+        
+        function extendedEuclideanAlgorithm(a, b) {
+            if (b === 0n) {
+                return { x: 1n, y: 0n, gcd: a };
+            }
+
+            const { x: prevX, y: prevY, gcd } = extendedEuclideanAlgorithm(b, a % b);
+            const x = prevY;
+            const y = prevX - (a / b) * prevY;
+            return { x, y, gcd };
+        }
+
+
+
+        function modInverse(e, phi) {
+            const { x, y, gcd } = extendedEuclideanAlgorithm(e, phi);
+            if (gcd !== 1n) {
+                throw new Error('modular inverse does not exist');
+            }
+            return x % phi;
+        }
+
+
+
+        function bigIntToUint8Array(n) {
+            const hex = n.toString(16).padStart(Math.ceil(n.toString(16).length / 2) * 2, '0');
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.slice(i, i + 2), 16);
+            }
+            return bytes;
+        }
+
+
+        function genereateKeys(){
+            let primes = find2Primes();
+
+            let n = primes[0]*primes[1];
+            let e = 65537n;
+            let phi = (primes[0]-BigInt(1))*(primes[1]-BigInt(1))
+            let d = modInverse(e,phi);
+            let publicKey = `${n},${e}`;
+            let privateKey = `${n},${d}`;
+
+
+            //const pubBase64 = btoa(String.fromCharCode.apply(null, bigIntToUint8Array(publicKey)));
+            //const privBase64 = btoa(String.fromCharCode.apply(null, bigIntToUint8Array(privateKey)));
+            const pubBase64 = btoa(publicKey);
+            const privBase64 = btoa(privateKey);
+            document.getElementById("public_key").value = pubBase64;
+            
+            document.getElementById("private_key").value = privBase64;
+
+        }
+
+        function strToBigInt(str) {
+            let result = 0n;
+            for (let i = 0; i < str.length; i++) {
+                result += BigInt(str.charCodeAt(i)) << BigInt(8 * i);
+            }
+            return result;
+        }
+
+        function bigIntToStr(n, radix) {
+            if (radix === undefined) {
+                radix = 10;
+            }
+            if (radix < 2 || radix > 36) {
+                throw new RangeError("radix argument must be between 2 and 36");
+            }
+            if (n === 0n) {
+                return "0";
+            }
+            let str = "";
+            const sign = n < 0n ? "-" : "";
+            n = sign === "-" ? -n : n;
+            while (n > 0n) {
+                const digit = Number(n % BigInt(radix));
+                str = digit.toString(radix) + str;
+                n = (n - BigInt(digit)) / BigInt(radix);
+            }
+            return sign + str;
+        }
+
+
+
+        function modExp(base, exponent, modulus) {
+            let result = 1n;
+            base = base % modulus;
+            while (exponent > 0) {
+                if (exponent % 2n == 1n) {
+                result = (result * base) % modulus;
+                }
+                exponent = exponent >> 1n;
+                base = (base * base) % modulus;
+            }
+            return result;
+        }
+
+
+        function rsaEncrypt(message, n, e) {
+            const m = strToBigInt(message);
+            const c = modExp(m, e, n);
+            return btoa(c) // return the encrypted message as a base64 string
+        }
+
+        function rsaDecrypt(encrypted, n, d) {
+            const c = BigInt(atob(encrypted));
+            const m = modExp(c, d, n);
+            return bigIntToStr(m,36);
+        }
+
+        function testEncrypt(){
+            
+           let public_key =  atob(document.getElementById("public_key").value)
+
+           let msg = document.getElementById("test").value;
+
+           let ne = public_key.split(',');
+           let n_ = BigInt(ne[0]);
+           let e_ = BigInt(ne[1]);
+           let encrypted = rsaEncrypt(msg, n_, e_)
+           document.getElementById("test").value = encrypted;
+        }
+
+        function testDecrypt(){
+            
+            let private_key =  atob(document.getElementById("private_key").value)
+ 
+            let msg = document.getElementById("test").value;
+ 
+            let ne = private_key.split(',');
+            let n_ = BigInt(ne[0]);
+            let e_ = BigInt(ne[1]);
+            let decrypted = rsaDecrypt(msg, n_, e_)
+            document.getElementById("test").value = decrypted;
+        }
+ 
+ 
+
+
+
+
+        </script>
+
+
+    </head>
+    <body style="text-align:left; max-width:1024px; border:10px black solid";>
+        <h1>Offical SSHKEYS.ORG Website</h1>
+        <h3>Your one stop shop for never having to enter a password again</h3>
+
+        <div>
+           <button onclick="genereateKeys()">Generate Keys</button>
+           <button onclick="testEncrypt()">Encrypt</button>
+           <button onclick="testDecrypt()">Decrypt</button>
+        <div>
+        <div>
+            <textarea id="public_key"></textarea>
+            <textarea id="private_key"></textarea>
+            <textarea id="test"></textarea>
+        </div>
+
+
+
+
+
+
+
+        </div>
+    </body>
+</html>
